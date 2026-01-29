@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Helix Visual Cloud</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6c5ce7; --secondary: #a29bfe; --danger: #ff7675; 
+            --success: #55efc4; --glass: rgba(255, 255, 255, 0.1); --bg: #0b0e1e;
+        }
+
+        body { font-family: 'Poppins', sans-serif; margin: 0; background: var(--bg); color: white; min-height: 100dvh; }
+        .hidden { display: none !important; }
+
+        /* Top Header Banner */
+        .top-header-banner { width: 100%; height: 180px; object-fit: cover; border-radius: 0 0 25px 25px; border-bottom: 2px solid var(--primary); margin-bottom: 20px; }
+
+        #view-screen { padding: 15px; max-width: 600px; margin: auto; padding-bottom: 100px; }
+        .glass-box { background: var(--glass); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); padding: 25px; border-radius: 25px; width: 90%; max-width: 350px; text-align: center; }
+
+        #login-screen, #upload-screen { height: 100dvh; display: flex; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; }
+
+        /* Full Size Card & Image */
+        .card { 
+            background: rgba(255, 255, 255, 0.05); border-radius: 20px; padding: 0; 
+            margin-bottom: 25px; position: relative; overflow: hidden; 
+            border: 1px solid rgba(255,255,255,0.1); animation: fadeIn 0.4s ease; 
+        }
+        .card-content { padding: 15px; }
+        
+        /* Banner inside card - Full Width */
+        .card img { 
+            width: 100%; height: auto; display: block; 
+            border-bottom: 1px solid rgba(255,255,255,0.1); 
+            max-height: 500px; object-fit: cover; 
+        }
+
+        .card h3 { margin: 0; font-size: 1.1rem; color: var(--secondary); padding-right: 40px; }
+        .card p { font-size: 0.9rem; color: #ddd; margin: 12px 0; word-break: break-word; line-height: 1.5; }
+        .card a { color: var(--success); text-decoration: underline; word-break: break-all; }
+
+        /* Controls */
+        input, textarea { width: 100%; padding: 14px; margin: 10px 0; background: rgba(0,0,0,0.3); border: 1px solid var(--glass); border-radius: 12px; color: white; font-size: 16px; box-sizing: border-box; }
+        button { width: 100%; padding: 15px; border: none; border-radius: 15px; background: var(--primary); color: white; font-weight: 600; font-size: 1rem; }
+        
+        .delete-btn { 
+            position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; 
+            background: rgba(255,118,117,0.8); color: white; border-radius: 50%; 
+            display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 5; cursor: pointer;
+        }
+
+        .fab { position: fixed; bottom: 30px; right: 25px; width: 60px; height: 60px; background: var(--primary); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 100; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <div class="glass-box">
+            <h2 style="margin-top:0">Helix Access</h2>
+            <input type="password" id="passKey" placeholder="Access Code">
+            <button onclick="handleLogin()">Unlock Portal</button>
+        </div>
+    </div>
+
+    <div id="view-screen" class="hidden">
+        <img id="top-banner" class="top-header-banner" src="" alt="Header">
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2 id="view-title" style="margin:0; font-size:1.3rem;">Dashboard</h2>
+            <button onclick="location.reload()" style="width:auto; padding:6px 15px; background:var(--danger); font-size:12px; border-radius:10px;">Exit</button>
+        </div>
+
+        <input type="text" id="searchInput" placeholder="🔍 Search links or titles..." onkeyup="filterData()" class="search-bar" style="width:100%; padding:12px; background:rgba(255,255,255,0.05); border:none; border-radius:12px; color:white; margin-bottom:20px;">
+
+        <div id="data-list"></div>
+        <div class="fab" onclick="showUploader()">+</div>
+    </div>
+
+    <div id="upload-screen" class="hidden">
+        <div class="glass-box" style="max-width:400px; width:100%;">
+            <h3 style="margin-top:0">Upload to Cloud</h3>
+            <input type="text" id="dataTitle" placeholder="Post Title">
+            <textarea id="dataContent" rows="4" placeholder="Description or Link"></textarea>
+            
+            <label style="font-size:11px; color:var(--secondary); display:block; text-align:left; margin-top:10px;">📸 Attachment (Banner Image)</label>
+            <input type="file" id="imageInput" accept="image/*" style="font-size:12px;">
+            
+            <button id="uploadBtn" onclick="uploadData()">Save to Cloud</button>
+            <p onclick="showView()" style="cursor:pointer; font-size:0.8rem; margin-top:15px; opacity:0.6">← Back</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCfRjYCF7k6bV3Pp9BHXm86yEVkkll4rzQ",
+            authDomain: "helix-ofc-7d382.firebaseapp.com",
+            databaseURL: "https://helix-ofc-7d382-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "helix-ofc-7d382",
+            storageBucket: "helix-ofc-7d382.appspot.com",
+            appId: "1:443626880782:web:0a697b0fb7eafe4910615f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const storage = getStorage(app);
+        let currentPath = "";
+        let allItems = [];
+
+        window.handleLogin = function() {
+            const key = document.getElementById('passKey').value;
+            const topBanner = document.getElementById('top-banner');
+            
+            if (key === "FF1234") { 
+                currentPath = "private_vault"; 
+                topBanner.src = "banner1.png"; // Cyber/Private
+                startPortal("🚀 Secret Vault");
+            } else if (key === "123456") { 
+                currentPath = "educational_content"; 
+                topBanner.src = "banner2.png"; // Education
+                startPortal("📚 Edu Center");
+            } else { alert("Wrong Password!"); }
+        };
+
+        function startPortal(title) {
+            document.getElementById('view-title').innerText = title;
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('view-screen').classList.remove('hidden');
+            fetchData();
+        }
+
+        function fetchData() {
+            onValue(ref(db, currentPath), (snap) => {
+                const list = document.getElementById('data-list');
+                list.innerHTML = "";
+                allItems = [];
+                const data = snap.val();
+                if (data) {
+                    Object.keys(data).reverse().forEach(id => {
+                        const item = data[id];
+                        allItems.push({...item, id});
+                        renderCard(item, id);
+                    });
+                } else {
+                    list.innerHTML = "<p style='text-align:center; opacity:0.2; margin-top:60px;'>Empty Vault</p>";
+                }
+            });
+        }
+
+        function renderCard(item, id) {
+            const list = document.getElementById('data-list');
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const content = item.content.replace(urlRegex, (url) => `<a href="${url}" target="_blank">${url}</a>`);
+            
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.innerHTML = `
+                <div class="delete-btn" onclick="deleteItem('${id}')">✕</div>
+                ${item.imgUrl ? `<img src="${item.imgUrl}" alt="banner">` : ''}
+                <div class="card-content">
+                    <h3>${item.title}</h3>
+                    <p>${content}</p>
+                    <span style="font-size:10px; opacity:0.4;">${new Date(item.timestamp).toLocaleString()}</span>
+                </div>
+            `;
+            list.appendChild(div);
+        }
+
+        window.uploadData = async function() {
+            const title = document.getElementById('dataTitle').value;
+            const content = document.getElementById('dataContent').value;
+            const fileInput = document.getElementById('imageInput');
+            const file = fileInput.files[0];
+            const btn = document.getElementById('uploadBtn');
+
+            if(!title || !content) return alert("Title and Content required!");
+            btn.disabled = true; btn.innerText = "Uploading to Cloud...";
+
+            let imgUrl = "";
+            try {
+                if (file) {
+                    const imgRef = sRef(storage, `banners/${Date.now()}_${file.name}`);
+                    await uploadBytes(imgRef, file);
+                    imgUrl = await getDownloadURL(imgRef);
+                }
+                await push(ref(db, currentPath), { title, content, imgUrl, timestamp: Date.now() });
+                fileInput.value = "";
+                showView();
+            } catch(e) { alert("Error: " + e.message); }
+            finally { btn.disabled = false; btn.innerText = "Save to Cloud"; }
+        };
+
+        window.deleteItem = (id) => { if(confirm("Permanently delete this item?")) remove(ref(db, `${currentPath}/${id}`)); };
+        
+        window.filterData = () => {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const list = document.getElementById('data-list');
+            list.innerHTML = "";
+            allItems.filter(i => i.title.toLowerCase().includes(q) || i.content.toLowerCase().includes(q))
+                    .forEach(item => renderCard(item, item.id));
+        };
+
+        window.showUploader = () => { document.getElementById('view-screen').classList.add('hidden'); document.getElementById('upload-screen').classList.remove('hidden'); };
+        window.showView = () => { document.getElementById('upload-screen').classList.add('hidden'); document.getElementById('view-screen').classList.remove('hidden'); };
+    </script>
+</body>
+</html>
